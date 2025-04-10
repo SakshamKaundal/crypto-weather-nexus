@@ -22,7 +22,8 @@ export default function News() {
       }
 
       const response = await fetch(
-        `https://newsdata.io/api/1/news?apikey=pub_79396bab8df15891bf6d9cd50be4d96f79c3a&q=${searchQuery}&language=en`
+        `https://newsdata.io/api/1/news?apikey=${process.env.NEXT_PUBLIC_NEWS_API_KEY}&q=${searchQuery}&language=en`
+
       );
 
       if (!response.ok) {
