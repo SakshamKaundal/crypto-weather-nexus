@@ -1,86 +1,143 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchCryptoData } from "@/redux/slices/cryptoSlice";
+import CryptoGraph from '../components/CryptoGraph';
 
-const cryptos = ["bitcoin", "ethereum", "dogecoin"]; // List of cryptocurrencies
+// Default cryptocurrencies to display
+const defaultCryptos = ["bitcoin", "ethereum", "dogecoin", "ripple", "cardano"];
 
 export default function Crypto() {
-  const [cryptoData, setCryptoData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const dispatch = useDispatch();
+  const { data: cryptoData, loading, error } = useSelector((state) => state.crypto);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCrypto, setSelectedCrypto] = useState(null);
+  const [displayCryptos, setDisplayCryptos] = useState(defaultCryptos);
 
-  const fetchCryptoData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  useEffect(() => {
+    dispatch(fetchCryptoData(displayCryptos));
+    const interval = setInterval(() => {
+      dispatch(fetchCryptoData(displayCryptos));
+    }, 60000); // Refresh every minute
 
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${cryptos.join(
-          ","
-        )}&vs_currencies=usd&include_market_cap=true&include_24hr_change=true`
-      );
+    return () => clearInterval(interval);
+  }, [dispatch, displayCryptos]);
 
-      const data = await response.json();
-      setCryptoData(data);
-    } catch (err) {
-      setError("Failed to fetch cryptocurrency data. Please try again later.");
-    } finally {
-      setLoading(false);
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      const newCryptos = [...displayCryptos, searchQuery.toLowerCase()];
+      setDisplayCryptos(newCryptos);
+      dispatch(fetchCryptoData(newCryptos));
+      setSearchQuery('');
     }
   };
 
-  useEffect(() => {
-    fetchCryptoData();
-  }, []);
+  const handleCryptoClick = (cryptoId) => {
+    setSelectedCrypto(cryptoId);
+  };
 
-  if (loading) {
-    return <div className="p-6 text-2xl">Loading cryptocurrency data...</div>;
-  }
+  const removeCrypto = (cryptoId, e) => {
+    e.stopPropagation();
+    const newCryptos = displayCryptos.filter(id => id !== cryptoId);
+    setDisplayCryptos(newCryptos);
+    dispatch(fetchCryptoData(newCryptos));
+  };
 
-  if (error) {
-    return <div className="p-6 text-2xl text-red-500">{error}</div>;
-  }
+  const filteredCryptos = displayCryptos.filter(cryptoId =>
+    cryptoId.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (loading && !Object.keys(cryptoData).length) return (
+    <div className="flex justify-center items-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  );
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-4">💰 Crypto Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {cryptos.map((crypto) => {
-          const data = cryptoData[crypto];
-          const price = data?.usd;
-          const marketCap = data?.usd_market_cap;
-          const change = data?.usd_24h_change;
-
-          return (
-            <div
-              key={crypto}
-              className="p-4 border rounded-lg shadow-md text-center flex flex-col items-center justify-center bg-gray-800 text-white"
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-4xl font-bold mb-8">Cryptocurrency Tracker</h1>
+        
+        <form onSubmit={handleSearch} className="mb-8">
+          <div className="flex gap-4">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or symbol..."
+              className="flex-1 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500"
+            />
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <h2 className="text-xl font-semibold capitalize">{crypto}</h2>
-              {price !== undefined ? (
-                <p className="text-lg">💵 Price: ${price.toFixed(2)}</p>
-              ) : (
-                <p className="text-lg text-red-500">Price unavailable</p>
-              )}
-              {marketCap !== undefined ? (
-                <p>📊 Market Cap: ${marketCap.toLocaleString()}</p>
-              ) : (
-                <p className="text-red-500">Market Cap unavailable</p>
-              )}
-              {change !== undefined ? (
-                <p
-                  className={`${
-                    change >= 0 ? "text-green-500" : "text-red-500"
-                  }`}
-                >
-                  {change >= 0 ? "📈" : "📉"} 24h Change: {change.toFixed(2)}%
-                </p>
-              ) : (
-                <p className="text-red-500">24h Change unavailable</p>
-              )}
-            </div>
-          );
-        })}
+              Search
+            </button>
+          </div>
+        </form>
+
+        {loading && (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-lg mb-8">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredCryptos.map((cryptoId) => {
+            const crypto = cryptoData[cryptoId];
+            if (!crypto) return null;
+
+            return (
+              <div
+                key={cryptoId}
+                className={`bg-gray-800 rounded-lg p-6 cursor-pointer transition-all ${
+                  selectedCrypto === cryptoId ? 'ring-2 ring-blue-500' : ''
+                }`}
+                onClick={() => handleCryptoClick(cryptoId)}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-xl font-semibold capitalize">{cryptoId}</h2>
+                  </div>
+                  <button
+                    onClick={(e) => removeCrypto(cryptoId, e)}
+                    className="text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="mb-4">
+                  <p className="text-2xl font-bold">${crypto.usd.toLocaleString()}</p>
+                  <p className={`text-sm ${crypto.usd_24h_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {crypto.usd_24h_change >= 0 ? '↑' : '↓'} {Math.abs(crypto.usd_24h_change).toFixed(2)}%
+                  </p>
+                </div>
+
+                {selectedCrypto === cryptoId && (
+                  <div className="mt-4">
+                    <CryptoGraph symbol={cryptoId} />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+                  <div>
+                    <p className="text-gray-400">Market Cap</p>
+                    <p className="font-medium">${(crypto.usd_market_cap / 1e9).toFixed(2)}B</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
